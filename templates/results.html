@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Prediction Results</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        
+        p {
+            text-align: center;
+        }
+        
+        table {
+            width: 80%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: center;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+            color: #333;
+            cursor: pointer; /* Add cursor pointer for clickable effect */
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .green {
+            background-color: #7FFF7F; /* Light green */
+        }
+        
+        .red {
+            background-color: #FF7F7F; /* Light red */
+        }
+        
+        form {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 4px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Prediction Results</h1>
+    <p>RMSE: {{ rmse }}</p>
+    <p>Total Green Boxes: {{ green_count }}</p>
+    <p>Total Red Boxes: {{ red_count }}</p>
+    <h2>Results</h2>
+    <table border="1" id="results_table">
+        <thead>
+            <tr>
+                <th><a href="/sort?col=index">Index</a></th>
+                <th><a href="/sort?col=predicted_RUL">Predicted RUL</a></th>
+                <th><a href="/sort?col=actual_RUL">Actual RUL</a></th>
+                <th><a href="/sort?col=urgency">Urgency</a></th>  <!-- Add Urgency column -->
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>{{ result.index }}</td>
+                <td>{{ result.predicted_RUL }}</td>
+                <td class="{% if result.actual_RUL >= result.predicted_RUL %}green{% else %}red{% endif %}">
+                    {{ result.actual_RUL }}
+                </td>
+                <td>{{ result.urgency }}</td>  <!-- Display Urgency -->
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <form action="/download_results" method="get">
+        <input type="hidden" name="csv_data" value="{{ csv_data }}">
+        <button type="submit">Download Results</button>
+    </form>
+
+</body>
+</html>
