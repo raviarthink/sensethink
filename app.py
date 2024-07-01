@@ -11,22 +11,28 @@ from keras.models import load_model
 import joblib
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
 
 app = Flask(__name__)
-model = whisper.load_model("base")
-lstm_model = load_model('lstm_model.h5')
-rf_model = joblib.load('random_forest_model.pkl')
-scaler = joblib.load('scaler.pkl')   
 
 # Configuration for audio recording
 FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 44100
-CHUNK = 1024
-RECORD_SECONDS = 5  # Adjust as needed
+CHANNELS = int(os.getenv('CHANNELS', 1))
+RATE = int(os.getenv('RATE', 44100))
+CHUNK = int(os.getenv('CHUNK', 1024))
+RECORD_SECONDS = int(os.getenv('RECORD_SECONDS', 5))  # Adjust as needed
+
+# Load models and scaler
+model = whisper.load_model(os.getenv('MODEL_PATH', 'base'))
+lstm_model = load_model(os.getenv('LSTM_MODEL_PATH', 'lstm_model.h5'))
+rf_model = joblib.load(os.getenv('RF_MODEL_PATH', 'random_forest_model.pkl'))
+scaler = joblib.load(os.getenv('SCALER_PATH', 'scaler.pkl'))
 
 # Temporary directory to store audio recordings
-UPLOAD_FOLDER = '/tmp'
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', '/tmp')
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
@@ -217,7 +223,6 @@ def sort_results():
 
     return render_template('results.html', rmse=rmse, results=results_sorted, csv_data=output.getvalue(),
                            green_count=green_count, red_count=red_count)
-
 
 if __name__ == "__main__":
     app.run(debug=True)
