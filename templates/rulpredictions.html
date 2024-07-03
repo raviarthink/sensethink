@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RUL PREDICTION</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        form {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        select, input[type="file"], input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+
+        /* Voice Transcription Section */
+        #transcriptionContainer {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        #transcriptionResults {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-height: 50px;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>RUL PREDICTION</h1>
+
+    <!-- Prediction Form -->
+    <form action="/predict" method="post" enctype="multipart/form-data">
+        <!-- Model Selection -->
+        <label for="model">Choose a model:</label>
+        <select name="model" id="model">
+            <option value="LSTM">LSTM</option>
+            <option value="RF">Random Forest</option>
+            <option value="Combined">Combined</option>
+        </select>
+        <br><br>
+
+        <!-- Upload CSV File -->
+        <input type="file" name="file" accept=".csv">
+        <br><br>
+
+        <!-- Predict Button -->
+        <input type="submit" value="Predict">
+    </form>
+
+    <!-- Voice Transcription Section -->
+    <h1>Audio Transcription</h1>
+    <button id="recordButton" onclick="toggleRecording()">Start Recording</button>
+    <div id="result"></div>
+
+    <script>
+        let isRecording = false;
+        let chunks = [];
+        let mediaRecorder;
+
+        function toggleRecording() {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function(stream) {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = function(e) {
+                        chunks.push(e.data);
+                    };
+                    mediaRecorder.onstop = function() {
+                        const blob = new Blob(chunks, { 'type' : 'audio/wav' });
+                        chunks = [];
+                        uploadAudio(blob);
+                    };
+                    mediaRecorder.start();
+                    console.log('Recording started');
+                    document.getElementById('recordButton').innerText = 'Finish Recording';
+                    isRecording = true;
+                })
+                .catch(function(err) {
+                    console.error('Error accessing microphone:', err);
+                });
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            console.log('Recording stopped');
+            document.getElementById('recordButton').innerText = 'Start Recording';
+            isRecording = false;
+        }
+
+        function uploadAudio(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'recording.wav');
+
+            fetch('/transcribe', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(result => {
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `
+                    <div class="transcription">
+                        <h2>Transcription (English):</h2>
+                        <p>${result.transcription_en}</p>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('result').innerText = 'An error occurred during transcription.';
+            });
+        }
+    </script>
+</body>
+</html>

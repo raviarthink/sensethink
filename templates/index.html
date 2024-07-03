@@ -1,183 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>RUL PREDICTION</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to SenseThink</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 20px;
-        }
-        
-        h1 {
+            margin: 0;
+            padding: 0;
+            font-family: Georgia, 'Times New Roman', Times, serif;
+            background-image: url('/static/images/background.jpg'); /* Replace with your image path */
+            background-size: cover;
+            background-position: center;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             text-align: center;
-            color: #333;
         }
-        
-        form {
-            max-width: 600px;
-            margin: 20px auto;
+        .container {
+            background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white background */
             padding: 20px;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            max-width: 80%;
         }
-        
-        label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 10px;
+        h1 {
+            font-size: 2.5rem;
+            color: #333; /* Dark text color */
         }
-        
-        select, input[type="file"], input[type="submit"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-top: 20px;
+            text-decoration: none;
+            background-color: #007bff; /* Bootstrap primary blue color */
+            color: #fff; /* White text color */
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
         }
-        
-        input[type="submit"] {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
+        .btn:hover {
+            background-color: #0056b3; /* Darker shade of blue on hover */
         }
-        
-        input[type="submit"]:hover {
-            background-color: #45a049;
-        }
-
-        /* Voice Transcription Section */
-        #transcriptionContainer {
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-        }
-
-        #transcriptionResults {
-            margin-top: 10px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            min-height: 50px;
-        }
-
-        button {
-            display: block;
-            width: 100%;
-            padding: 10px;
-            margin-top: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
+        .login-btn {
+    justify-content: center;
+    flex-direction: row;
+    display: flex;
+    background-color: rgb(255, 255, 255);
+    justify-content: center;
+    align-items: center;
+    width: 220px;
+    padding: 10px;
+    box-shadow: 3px 3px 3px rgb(170, 170, 170);
+    border-radius: 15px;
+}
+.btn-text {
+    justify-content: center;
+    padding: 10px;
+    font-family: 'Poppins', sans-serif;
+    color: rgb(85, 85, 85);
+}
     </style>
 </head>
 <body>
-    <h1>RUL PREDICTION</h1>
-
-    <!-- Prediction Form -->
-    <form action="/predict" method="post" enctype="multipart/form-data">
-        <!-- Model Selection -->
-        <label for="model">Choose a model:</label>
-        <select name="model" id="model">
-            <option value="LSTM">LSTM</option>
-            <option value="RF">Random Forest</option>
-            <option value="Combined">Combined</option>
-        </select>
-        <br><br>
-
-        <!-- Upload CSV File -->
-        <input type="file" name="file" accept=".csv">
-        <br><br>
-
-        <!-- Predict Button -->
-        <input type="submit" value="Predict">
-    </form>
-
-    <!-- Voice Transcription Section -->
-    <h1>Audio Transcription</h1>
-    <button id="recordButton" onclick="toggleRecording()">Start Recording</button>
-    <div id="result"></div>
-
-    <script>
-        let isRecording = false;
-        let chunks = [];
-        let mediaRecorder;
-
-        function toggleRecording() {
-            if (!isRecording) {
-                startRecording();
-            } else {
-                stopRecording();
-            }
-        }
-
-        function startRecording() {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(function(stream) {
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.ondataavailable = function(e) {
-                        chunks.push(e.data);
-                    };
-                    mediaRecorder.onstop = function() {
-                        const blob = new Blob(chunks, { 'type' : 'audio/wav' });
-                        chunks = [];
-                        uploadAudio(blob);
-                    };
-                    mediaRecorder.start();
-                    console.log('Recording started');
-                    document.getElementById('recordButton').innerText = 'Finish Recording';
-                    isRecording = true;
-                })
-                .catch(function(err) {
-                    console.error('Error accessing microphone:', err);
-                });
-        }
-
-        function stopRecording() {
-            mediaRecorder.stop();
-            console.log('Recording stopped');
-            document.getElementById('recordButton').innerText = 'Start Recording';
-            isRecording = false;
-        }
-
-        function uploadAudio(blob) {
-            const formData = new FormData();
-            formData.append('audio', blob, 'recording.wav');
-
-            fetch('/transcribe', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(result => {
-                const resultDiv = document.getElementById('result');
-                resultDiv.innerHTML = `
-                    <div class="transcription">
-                        <h2>Transcription (English):</h2>
-                        <p>${result.transcription_en}</p>
-                    </div>
-                `;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('result').innerText = 'An error occurred during transcription.';
-            });
-        }
-    </script>
-
-
+    <div class="container" align="center">
+        <h1>Welcome to SenseThink</h1>
+            <a href="google/" class="login-btn" style="text-decoration:none;">
+                <img id="google" src="https://www.outsystems.com/Forge_CW/_image.aspx/Q8LvY--6WakOw9afDCuuGbSRbewerkJ3wQDZCrCmiSk=/google-login-reactive-2023-01-04%2000-00-00-2024-03-28%2011-05-55"
+            alt="Google"
+            style="width:50px;height:50px;">
+            <div class="btn-text">
+                Login with Google
+            </div>
+            </a> 
+        </div>
+    </div>
 </body>
 </html>

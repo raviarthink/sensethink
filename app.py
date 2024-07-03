@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file,url_for, session,redirect,sessions as sess
 import os
 import pyaudio
 import wave
@@ -12,6 +12,29 @@ import joblib
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 from dotenv import load_dotenv
+import keras.losses
+from authlib.integrations.flask_client import OAuth
+from authlib.common.security import generate_token
+app = Flask(__name__)
+
+oauth = OAuth(app)
+ 
+# Configure Google OAuth client
+google_client_id = os.getenv('GOOGLE_CLIENT_ID')
+google_client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+ 
+oauth.register(
+    name='google',
+    client_id=google_client_id,
+    client_secret=google_client_secret,
+    authorize_params=None,
+    access_token_params=None,
+    refresh_token_url=None,
+    redirect_uri=None,
+    api_base_url='https://www.googleapis.com/oauth2/v3/',
+    client_kwargs={'scope': 'openid profile email', 'prompt': 'consent'},
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
+)
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -27,8 +50,14 @@ RECORD_SECONDS = int(os.getenv('RECORD_SECONDS', 5))  # Adjust as needed
 
 # Load models and scaler
 model = whisper.load_model(os.getenv('MODEL_PATH', 'base'))
-lstm_model = load_model(os.getenv('LSTM_MODEL_PATH', 'lstm_model.h5'))
-rf_model = joblib.load(os.getenv('RF_MODEL_PATH', 'random_forest_model.pkl'))
+
+# Load LSTM model with custom_objects to handle custom loss function
+try:
+    lstm_model = load_model(os.getenv('LSTM_MODEL_PATH', 'lstm_model.h5'), custom_objects={'mse': keras.losses.mean_squared_error})
+except ValueError as e:
+    print(f"Error loading LSTM model: {e}")
+
+rf_model = joblib.load(os.getenv('RF_MODEL_PATH', 'best_random_forest_model.pkl'))
 scaler = joblib.load(os.getenv('SCALER_PATH', 'scaler.pkl'))
 
 # Temporary directory to store audio recordings
@@ -42,6 +71,10 @@ rmse = 0.0
 green_count = 0
 red_count = 0
 output = io.StringIO()  # Initialize output as StringIO
+@app.route('/icreate')
+def icreate():
+    user_name = session.get('user_name', 'Guest')  # Get user name from session, default to 'Guest' if not available
+    return render_template('dashboard.html', user_name=user_name)
 
 @app.route('/')
 def index():
@@ -75,6 +108,9 @@ def transcribe():
         except Exception as e:
             print(f"Error during transcription: {e}")
             return str(e), 500
+@app.route('/rulpredictions', methods=['GET','POST'])
+def rulpredictions():
+    return render_template('rulpredictions.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -173,24 +209,23 @@ def predict():
                     rank = ranked_green_ruls.index(result['actual_RUL']) + 1
                     result['urgency'] = rank
                 else:
-                    result['urgency'] = "NIL"  # Red boxes get "NIL" urgency
+                    result['urgency'] = "NIL"
 
-        # Save results to a CSV file
+        # Write the sorted results to output CSV
         df_results = pd.DataFrame(results)
         df_results.to_csv(output, index=False)
-        output.seek(0)  # Move cursor to start of StringIO buffer
 
         return render_template('results.html', rmse=rmse, results=results, csv_data=output.getvalue(),
                                green_count=green_count, red_count=red_count)
 
     except Exception as e:
-        return jsonify({'error': f'Error processing prediction: {str(e)}'}), 500
+        print(f"Error processing file: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/download_results')
-def download_results():
+@app.route('/download_csv')
+def download_csv():
     global output
-    
-    # Ensure output is initialized as StringIO if needed
+
     if not isinstance(output, io.StringIO):
         output = io.StringIO()
 
@@ -223,6 +258,24 @@ def sort_results():
 
     return render_template('results.html', rmse=rmse, results=results_sorted, csv_data=output.getvalue(),
                            green_count=green_count, red_count=red_count)
+    
+@app.route('/google/')
+def google():
+    redirect_uri = url_for('google_auth', _external=True)
+    session['nonce'] = generate_token()
+    return oauth.google.authorize_redirect(redirect_uri, nonce=session['nonce'])
+
+ 
+@app.route('/google/auth/')
+def google_auth():
+    token = oauth.google.authorize_access_token()
+    user_info = oauth.google.parse_id_token(token, nonce=session['nonce'])
+    session['user_name'] = user_info.get('name', 'Guest')  # Store user name in session
+    return redirect('/icreate')
+ 
+ 
 
 if __name__ == "__main__":
+    app.secret_key = os.getenv('SECRET_KEY')
+    app.config['SESSION_TYPE'] = 'filesystem'
     app.run(debug=True)
