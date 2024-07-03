@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query CSV</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        form {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        input[type="text"], input[type="file"], input[type="submit"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+
+        #queryResult {
+            margin-top: 20px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /* Voice Transcription Section */
+        #transcriptionContainer {
+            max-width: 600px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        #recordButton {
+            display: block;
+            width: 100%;
+            max-width: 200px;
+            margin: 0 auto;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #recordButton:hover {
+            background-color: #45a049;
+        }
+
+        #result {
+            margin-top: 20px;
+        }
+
+        .transcription, .output {
+            margin-bottom: 20px;
+        }
+
+        .transcription h2, .output h2 {
+            color: #333;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .transcription p, .output p {
+            color: #555;
+            line-height: 1.5;
+        }
+
+        /* Audio Player Section */
+        .audio-player {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .audio-player button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .audio-player button:hover {
+            background-color: #45a049;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Query CSV</h1>
+
+    <!-- Query Form -->
+    <form id="query-form">
+        <label for="query">Enter your query:</label>
+        <input type="text" id="query" name="query" required>
+        <input type="submit" value="Submit">
+    </form>
+
+    <!-- Query Result Section -->
+    <div id="queryResult"></div>
+
+    <!-- Voice Transcription Section -->
+    <div id="transcriptionContainer">
+        <h1>Audio Transcription</h1>
+        <button id="recordButton" onclick="toggleRecording()">Start Recording</button>
+        <div id="result"></div>
+    </div>
+
+    <!-- Audio Player Section -->
+    <div class="audio-player">
+        <h1>Audio Player</h1>
+        <button onclick="playAudio()">Play Audio</button>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $('#query-form').on('submit', function(e) {
+                e.preventDefault();
+
+                const query = $('#query').val();
+
+                $.ajax({
+                    url: '/query',
+                    type: 'POST',
+                    data: { query: query },
+                    success: function(response) {
+                        if (response.result) {
+                            $('#queryResult').html(`<p><strong>Result:</strong> ${response.result}</p>`);
+                        } else {
+                            $('#queryResult').html(`<p><strong>Error:</strong> ${response.error}</p>`);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $('#queryResult').html(`<p><strong>Error:</strong> ${xhr.responseText}</p>`);
+                    }
+                });
+            });
+        });
+
+        let isRecording = false;
+        let chunks = [];
+        let mediaRecorder;
+
+        function toggleRecording() {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function(stream) {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = function(e) {
+                        chunks.push(e.data);
+                    };
+                    mediaRecorder.onstop = function() {
+                        const blob = new Blob(chunks, { 'type' : 'audio/wav' });
+                        chunks = [];
+                        uploadAudio(blob);
+                    };
+                    mediaRecorder.start();
+                    console.log('Recording started');
+                    document.getElementById('recordButton').innerText = 'Finish Recording';
+                    isRecording = true;
+                })
+                .catch(function(err) {
+                    console.error('Error accessing microphone:', err);
+                });
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            console.log('Recording stopped');
+            document.getElementById('recordButton').innerText = 'Start Recording';
+            isRecording = false;
+        }
+
+        function uploadAudio(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'recording.wav');
+
+            fetch('/transcribe', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(result => {
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `
+                    <div class="transcription">
+                        <h2>Transcription (English):</h2>
+                        <p>${result.transcription_en}</p>
+                    </div>
+                    <div class="output">
+                        <h2>Output:</h2>
+                        <p>${result.output}</p>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('result').innerText = 'An error occurred during transcription.';
+            });
+        }
+
+        function playAudio() {
+            var audio = new Audio('/get_audio');
+            audio.play();
+        }
+    </script>
+</body>
+</html>

@@ -8,10 +8,8 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: Georgia, 'Times New Roman', Times, serif;
-            background-image: url('/static/images/background.jpg'); /* Replace with your image path */
-            background-size: cover;
-            background-position: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f0f0; /* Light gray background */
             height: 100vh;
             display: flex;
             justify-content: center;
@@ -19,34 +17,35 @@
             text-align: center;
         }
         .container {
-            background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white background */
+            background-color: rgba(255, 255, 255, 0.9); /* Semi-transparent white background */
             padding: 20px;
             border-radius: 10px;
             max-width: 80%;
-            position: relative; /* Ensure relative positioning for absolute positioning within */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Soft shadow */
         }
         h2 {
-            font-size: 2rem;
+            font-size: 2.5rem;
             color: #333; /* Dark text color */
         }
         .btn {
             display: inline-block;
-            padding: 10px 20px;
+            padding: 12px 24px;
             margin-top: 20px;
             text-decoration: none;
-            background-color: #667BC6; /* Bootstrap primary blue color */
+            background-color: #4CAF50; /* Green button */
             color: #fff; /* White text color */
             border-radius: 5px;
             transition: background-color 0.3s ease;
         }
         .btn:hover {
-            background-color: #667BC6; /* Darker shade of blue on hover */
+            background-color: #45a049; /* Darker shade of green on hover */
         }
         .logout {
             position: absolute;
-            top: 20px; /* Adjust top position */
-            right: 20px; /* Adjust right position */
-            font-size: 1rem;
+            top: 20px;
+            right: 20px;
+            font-size: 1.2rem;
+            color: #555; /* Dark gray for logout text */
         }
         .row {
             display: flex;
@@ -75,6 +74,9 @@
             </div>
             <div class="col-md-6">
                 <a class="btn" href="{{ url_for('rulpredictions') }}">RUL Prediction</a>
+            </div>
+            <div class="col-md-6">
+                <a class="btn" href="{{ url_for('langchain') }}">Speech Processing</a>
             </div>
         </div>
     </div>

@@ -89,6 +89,7 @@
                 <th><a href="/sort?col=predicted_RUL">Predicted RUL</a></th>
                 <th><a href="/sort?col=actual_RUL">Actual RUL</a></th>
                 <th><a href="/sort?col=urgency">Urgency</a></th>  <!-- Add Urgency column -->
+                <th><a href="/sort?col=condition">Condition</a></th> <!-- Add Condition column -->
             </tr>
         </thead>
         <tbody>
@@ -100,6 +101,7 @@
                     {{ result.actual_RUL }}
                 </td>
                 <td>{{ result.urgency }}</td>  <!-- Display Urgency -->
+                <td>{{ result.condition }}</td> <!-- Display Condition -->
             </tr>
             {% endfor %}
         </tbody>

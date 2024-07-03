@@ -4,6 +4,9 @@ import pyaudio
 import wave
 import whisper
 import io
+import tempfile
+import openai
+
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -15,6 +18,12 @@ from dotenv import load_dotenv
 import keras.losses
 from authlib.integrations.flask_client import OAuth
 from authlib.common.security import generate_token
+from langchain_experimental.agents.agent_toolkits.csv.base import create_csv_agent
+from langchain_openai import ChatOpenAI
+from pathlib import Path
+from dotenv import load_dotenv
+
+
 app = Flask(__name__)
 
 oauth = OAuth(app)
@@ -46,11 +55,19 @@ FORMAT = pyaudio.paInt16
 CHANNELS = int(os.getenv('CHANNELS', 1))
 RATE = int(os.getenv('RATE', 44100))
 CHUNK = int(os.getenv('CHUNK', 1024))
-RECORD_SECONDS = int(os.getenv('RECORD_SECONDS', 5))  # Adjust as needed
+RECORD_SECONDS = int(os.getenv('RECORD_SECONDS', 5))
+
+# Temporary directory to store audio recordings
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', '/tmp')
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # Load models and scaler
 model = whisper.load_model(os.getenv('MODEL_PATH', 'base'))
-
+# Set up the OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
+llm = ChatOpenAI(temperature=0.7)
+agent_executor = None
 # Load LSTM model with custom_objects to handle custom loss function
 try:
     lstm_model = load_model(os.getenv('LSTM_MODEL_PATH', 'lstm_model.h5'), custom_objects={'mse': keras.losses.mean_squared_error})
@@ -59,11 +76,10 @@ except ValueError as e:
 
 rf_model = joblib.load(os.getenv('RF_MODEL_PATH', 'best_random_forest_model.pkl'))
 scaler = joblib.load(os.getenv('SCALER_PATH', 'scaler.pkl'))
+kmeans_model = joblib.load('kmeans_model.pkl')
 
-# Temporary directory to store audio recordings
-UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', '/tmp')
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+
+
 
 # Define global variables to hold prediction results
 results = []
@@ -80,37 +96,42 @@ def icreate():
 def index():
     return render_template('index.html')
 
-@app.route('/transcribe', methods=['POST'])
-def transcribe():
-    if 'audio' not in request.files:
-        return "No file part", 400
+# @app.route('/transcribe', methods=['POST'])
+# def transcribe():
+#     if 'audio' not in request.files:
+#         return "No file part", 400
 
-    file = request.files['audio']
-    if file.filename == '':
-        return "No selected file", 400
+#     file = request.files['audio']
+#     if file.filename == '':
+#         return "No selected file", 400
 
-    if file:
-        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-        file.save(filepath)
-        print(f"Saved file to {filepath}")
+#     if file:
+#         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+#         file.save(filepath)
+#         print(f"Saved file to {filepath}")
 
-        try:
-            # Transcribe audio forcing English language
-            result = model.transcribe(filepath, language='en')
-            text_en = result['text']
-            print(f"Transcription (English): {text_en}")
+#         try:
+#             # Transcribe audio forcing English language
+#             result = model.transcribe(filepath, language='en')
+#             text_en = result['text']
+#             print(f"Transcription (English): {text_en}")
 
-            os.remove(filepath)
-            print(f"Removed file {filepath}")
+#             os.remove(filepath)
+#             print(f"Removed file {filepath}")
 
-            return jsonify({"transcription_en": text_en})
+#             return jsonify({"transcription_en": text_en})
 
-        except Exception as e:
-            print(f"Error during transcription: {e}")
-            return str(e), 500
+#         except Exception as e:
+#             print(f"Error during transcription: {e}")
+#             return str(e), 500
+        
 @app.route('/rulpredictions', methods=['GET','POST'])
 def rulpredictions():
     return render_template('rulpredictions.html')
+
+@app.route('/langchain', methods=['GET','POST'])
+def langchain():
+    return render_template('langchain_index.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -142,10 +163,10 @@ def predict():
 
         if model_type == 'LSTM':
             # Reshape the data to fit the LSTM input requirements
-            X_scaled = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
+            X_scaled_lstm = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
 
             # Predict RUL for uploaded data
-            y_pred = lstm_model.predict(X_scaled)
+            y_pred = lstm_model.predict(X_scaled_lstm)
 
         elif model_type == 'RF':
             # Predict RUL using Random Forest model
@@ -168,6 +189,10 @@ def predict():
 
         # Calculate y_true here after dropping and processing data
         y_true = data['RUL'].values
+
+        # Load the KMeans model and predict conditions
+        conditions = kmeans_model.predict(X_scaled)  # Use original 2D scaled data
+        condition_labels = ['Healthy' if cond == 0 else 'Not Healthy' for cond in conditions]  # Adjust the condition labels based on your KMeans clustering
 
         # Prepare response
         results = []
@@ -192,7 +217,8 @@ def predict():
                 'index': i,
                 'predicted_RUL': predicted_RUL,
                 'actual_RUL': actual_RUL,
-                'urgency': urgency
+                'urgency': urgency,
+                'condition': condition_labels[i]  # Add condition to results
             })
 
         # Calculate RMSE (example, adjust as needed)
@@ -221,6 +247,7 @@ def predict():
     except Exception as e:
         print(f"Error processing file: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/download_csv')
 def download_csv():
@@ -274,8 +301,100 @@ def google_auth():
     return redirect('/icreate')
  
  
+@app.route('/query')
+def query_page():
+    return render_template('query.html')
+
+@app.route('/query', methods=['POST'])
+def query():
+    global agent_executor
+
+    user_input = request.form['query']
+    if agent_executor:
+        result = str(agent_executor.invoke(user_input))
+        re = result
+        #Creating a mp3 file with the output
+        client = openai.OpenAI()
+
+        speech_file_path = Path().parent / "hi.mp3"
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=re
+        )
+        response.stream_to_file(speech_file_path)
+        return jsonify(result=result)
+    else:
+        return jsonify(result="Please upload a CSV file first.")
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return redirect(request.url)
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(request.url)
+    if file and file.filename.endswith('.csv'):
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(filepath)
+        global agent_executor
+        agent_executor = create_csv_agent(llm, filepath, verbose=True, allow_dangerous_code=True)
+        return redirect(url_for('query_page'))
+    return redirect(request.url)
+
+@app.route('/transcribe', methods=['POST'])
+def transcribe():
+    if 'audio' not in request.files:
+        return "No file part", 400
+
+    file = request.files['audio']
+    if file.filename == '':
+        return "No selected file", 400
+
+    if file:
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
+        print(f"Saved file to {filepath}")
+
+        try:
+            # Transcribe audio forcing English language
+            result = model.transcribe(filepath, language='en')
+            text_en = result['text']
+            print(f"Transcription (English): {text_en}")
+
+            os.remove(filepath)
+            print(f"Removed file {filepath}")
+
+            # Process text using agent_executor
+            output = str(agent_executor.invoke(text_en))
+            re = output
+            #Creating a mp3 file with the output
+            client = openai.OpenAI()
+
+            speech_file_path = Path().parent / "hi.mp3"
+            response = client.audio.speech.create(
+                model="tts-1",
+                voice="nova",
+                input=re
+                )
+            response.stream_to_file(speech_file_path)
+            
+            # Return JSON response with both transcription_en and output
+            return jsonify(transcription_en=text_en, output=output)
+
+        except Exception as e:
+            print(f"Error during transcription: {e}")
+            return str(e), 500
+
+@app.route('/get_audio')
+def get_audio():
+    # Replace 'path_to_your_audio_file.mp3' with the actual path to your MP3 file
+    return send_file('/Users/siddarthayadav/Desktop/Voiceapp/LangchainCode/hi.mp3', mimetype='audio/mpeg')
+
 
 if __name__ == "__main__":
     app.secret_key = os.getenv('SECRET_KEY')
     app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
     app.run(debug=True)
