@@ -96,34 +96,34 @@ def icreate():
 def index():
     return render_template('index.html')
 
-# @app.route('/transcribe', methods=['POST'])
-# def transcribe():
-#     if 'audio' not in request.files:
-#         return "No file part", 400
+@app.route('/trans', methods=['POST'])
+def trans():
+    if 'audio' not in request.files:
+        return "No file part", 400
 
-#     file = request.files['audio']
-#     if file.filename == '':
-#         return "No selected file", 400
+    file = request.files['audio']
+    if file.filename == '':
+        return "No selected file", 400
 
-#     if file:
-#         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-#         file.save(filepath)
-#         print(f"Saved file to {filepath}")
+    if file:
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
+        print(f"Saved file to {filepath}")
 
-#         try:
-#             # Transcribe audio forcing English language
-#             result = model.transcribe(filepath, language='en')
-#             text_en = result['text']
-#             print(f"Transcription (English): {text_en}")
+        try:
+            # Transcribe audio forcing English language
+            result = model.transcribe(filepath, language='en')
+            text_en = result['text']
+            print(f"Transcription (English): {text_en}")
 
-#             os.remove(filepath)
-#             print(f"Removed file {filepath}")
+            os.remove(filepath)
+            print(f"Removed file {filepath}")
 
-#             return jsonify({"transcription_en": text_en})
+            return jsonify({"transcription_en": text_en})
 
-#         except Exception as e:
-#             print(f"Error during transcription: {e}")
-#             return str(e), 500
+        except Exception as e:
+            print(f"Error during transcription: {e}")
+            return str(e), 500
         
 @app.route('/rulpredictions', methods=['GET','POST'])
 def rulpredictions():
@@ -240,6 +240,7 @@ def predict():
         # Write the sorted results to output CSV
         df_results = pd.DataFrame(results)
         df_results.to_csv(output, index=False)
+        output.seek(0)  # Move to the start of the StringIO object
 
         return render_template('results.html', rmse=rmse, results=results, csv_data=output.getvalue(),
                                green_count=green_count, red_count=red_count)
@@ -247,6 +248,7 @@ def predict():
     except Exception as e:
         print(f"Error processing file: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 
 @app.route('/download_csv')
@@ -262,6 +264,8 @@ def download_csv():
         as_attachment=True,
         download_name='predicted_results.csv'
     )
+
+
 
 @app.route('/sort')
 def sort_results():
@@ -389,7 +393,7 @@ def transcribe():
 @app.route('/get_audio')
 def get_audio():
     # Replace 'path_to_your_audio_file.mp3' with the actual path to your MP3 file
-    return send_file('/Users/siddarthayadav/Desktop/Voiceapp/LangchainCode/hi.mp3', mimetype='audio/mpeg')
+    return send_file('hi.mp3', mimetype='audio/mpeg')
 
 
 if __name__ == "__main__":
