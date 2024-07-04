@@ -6,7 +6,6 @@ import whisper
 import io
 import tempfile
 import openai
-
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -23,6 +22,7 @@ from langchain_openai import ChatOpenAI
 from pathlib import Path
 from dotenv import load_dotenv
 
+pca = joblib.load('pca_model.pkl')
 
 app = Flask(__name__)
 
@@ -76,7 +76,7 @@ except ValueError as e:
 
 rf_model = joblib.load(os.getenv('RF_MODEL_PATH', 'best_random_forest_model.pkl'))
 scaler = joblib.load(os.getenv('SCALER_PATH', 'scaler.pkl'))
-kmeans_model = joblib.load('kmeans_model.pkl')
+kmeans_model = joblib.load('kmeans_model_withpca.pkl')
 
 
 
@@ -161,6 +161,9 @@ def predict():
         X = data.drop('RUL', axis=1)
         X_scaled = scaler.transform(X)
 
+        # Apply PCA transformation
+        X_pca = pca.transform(X_scaled)
+
         if model_type == 'LSTM':
             # Reshape the data to fit the LSTM input requirements
             X_scaled_lstm = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
@@ -190,8 +193,8 @@ def predict():
         # Calculate y_true here after dropping and processing data
         y_true = data['RUL'].values
 
-        # Load the KMeans model and predict conditions
-        conditions = kmeans_model.predict(X_scaled)  # Use original 2D scaled data
+        # Predict conditions using PCA-transformed data
+        conditions = kmeans_model.predict(X_pca)  # Use PCA-transformed data
         condition_labels = ['Healthy' if cond == 0 else 'Not Healthy' for cond in conditions]  # Adjust the condition labels based on your KMeans clustering
 
         # Prepare response
