@@ -7,6 +7,8 @@ import io
 import tempfile
 import openai
 import pandas as pd
+import warnings
+from statsmodels.tsa.stattools import grangercausalitytests
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from keras.models import load_model
@@ -132,6 +134,79 @@ def rulpredictions():
 @app.route('/langchain', methods=['GET','POST'])
 def langchain():
     return render_template('langchain_index.html')
+
+@app.route('/granger', methods=['GET', 'POST'])
+def granger():
+    if request.method == 'POST':
+        # Get the uploaded file
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part in the request.'}), 400
+
+        uploaded_file = request.files['file']
+        if uploaded_file.filename == '':
+            return jsonify({'error': 'No selected file.'}), 400
+
+        try:
+            # Load the CSV data
+            data = pd.read_csv(uploaded_file)
+
+            # Ensure the data is sorted by unit ID and cycles
+            data.sort_values(by=['unit_ID', 'cycles'], inplace=True)
+
+            # Get the list of sensors (excluding non-sensor columns)
+            sensors = [col for col in data.columns if col not in ['unit_ID', 'cycles', 'RUL']]
+
+            # Initialize a list to store results
+            results = []
+
+            # Suppress warnings for the Granger causality test
+            warnings.filterwarnings("ignore")
+
+            # Perform Granger Causality test for each pair of sensors
+            max_lag = 10  # Define maximum lag to test
+            for i, sensor1 in enumerate(sensors):
+                for sensor2 in sensors[i+1:]:
+                    # Prepare the data for Granger Causality test
+                    test_data = data[[sensor1, sensor2]].dropna()
+
+                    # Perform the Granger Causality test
+                    try: 
+                        test_result = grangercausalitytests(test_data, max_lag, verbose=False)
+                        p_values = [round(test_result[i+1][0]['ssr_ftest'][1], 4) for i in range(max_lag)]
+                        min_p_value = np.min(p_values)
+                        if min_p_value < 0.05:
+                            causality = "causal"
+                        else:
+                            causality = "not causal"
+                    except ValueError:
+                        min_p_value = None
+                        causality = "invalid"
+
+                    # Store the results
+                    results.append({'Sensor 1': sensor1, 'Sensor 2': sensor2, 'Min P-Value': min_p_value, 'Causality': causality})
+
+            # Re-enable warnings
+            warnings.filterwarnings("default")
+
+            # Convert the results into a DataFrame
+            results_df = pd.DataFrame(results)
+
+            # Save the results DataFrame to a CSV file
+            results_file_path = os.path.join(UPLOAD_FOLDER, 'granger_causality_results_mg.csv')
+            results_df.to_csv(results_file_path, index=False)
+
+            return render_template('granger_results.html', tables=[results_df.to_html(classes='data', header="true", index=False)], results_file_path=results_file_path)
+        
+        except Exception as e:
+            print(f"Error processing file: {e}")
+            return jsonify({'error': str(e)}), 500
+    return render_template('granger.html')
+
+@app.route('/download_granger_csv')
+def download_granger_csv():
+    results_file_path = os.path.join(UPLOAD_FOLDER, 'granger_causality_results_mg.csv')
+    return send_file(results_file_path, mimetype='text/csv', as_attachment=True, download_name='granger_causality_results.csv')
+
 
 @app.route('/predict', methods=['POST'])
 def predict():
